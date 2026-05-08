@@ -6,29 +6,6 @@ import {
   Briefcase, Scale, Wallet, ShieldCheck, GraduationCap, Store,
   ChevronRight, FileText, Check, Hash, Loader2,
 } from 'lucide-react';
-if (typeof window !== 'undefined' && !window.storage) {
-  window.storage = {
-    async list(prefix = '') {
-      const keys = Object.keys(localStorage).filter((key) => key.startsWith(prefix));
-      return { keys };
-    },
-
-    async get(key) {
-      const value = localStorage.getItem(key);
-      return value === null ? null : { value };
-    },
-
-    async set(key, value) {
-      localStorage.setItem(key, value);
-      return true;
-    },
-
-    async delete(key) {
-      localStorage.removeItem(key);
-      return true;
-    },
-  };
-}
 
 // =========================================================================
 // DESIGN TOKENS
@@ -352,7 +329,7 @@ function GlobalStyles() {
 // =========================================================================
 // DASHBOARD VIEW
 // =========================================================================
-function Dashboard({ docs, onOpen, onCreate, onDelete }) {
+function Dashboard({ docs, onOpen, onCreate, onDelete, onAdmin, lawyerProfile }) {
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showNewModal, setShowNewModal] = useState(false);
@@ -371,7 +348,7 @@ function Dashboard({ docs, onOpen, onCreate, onDelete }) {
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg }}>
-      <TopBar />
+      <TopBar onAdmin={onAdmin} lawyerProfile={lawyerProfile} />
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 28px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: 24 }}>
           <div>
@@ -436,15 +413,17 @@ function Dashboard({ docs, onOpen, onCreate, onDelete }) {
           onCreate={(brand) => { setShowNewModal(false); onCreate(brand); }}
         />
       )}
+      <SiteFooter lawyerProfile={lawyerProfile} />
     </div>
   );
 }
 
-function TopBar() {
+function TopBar({ onAdmin, lawyerProfile }) {
+  const lp = lawyerProfile;
   return (
     <div style={{
       borderBottom: `1px solid ${C.border}`, background: C.surface,
-      padding: '14px 28px', display: 'flex', alignItems: 'center',
+      padding: '12px 28px', display: 'flex', alignItems: 'center',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
@@ -456,20 +435,93 @@ function TopBar() {
         <div style={{ fontSize: 14, fontWeight: 600, color: C.ink, letterSpacing: '-0.01em' }}>
           정보공개서 자동작성
         </div>
-        <div style={{ fontSize: 11, color: C.inkSubtle, padding: '2px 7px',
-          background: C.surfaceAlt, borderRadius: 999, marginLeft: 4 }}>
-          데모
-        </div>
       </div>
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18,
+      {lp && lp.name && (
+        <div style={{
+          marginLeft: 20, padding: '4px 12px', background: C.accentLight,
+          borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent }} />
+          <span style={{ fontSize: 12, color: C.accent, fontWeight: 500 }}>
+            {lp.name} 변호사 {lp.firm ? `| ${lp.firm}` : ''} 법률 서비스
+          </span>
+        </div>
+      )}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12,
         fontSize: 13, color: C.inkMuted }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
           <HelpCircle size={14} /> 도움말
         </span>
-        <span style={{ color: C.ink, fontWeight: 500 }}>(주)공정위</span>
+        <button onClick={onAdmin} title="관리자 설정" style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 30, height: 30, borderRadius: 6, border: `1px solid ${C.border}`,
+          background: C.surface, cursor: 'pointer', color: C.inkSubtle,
+          transition: 'all 0.12s',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </button>
       </div>
     </div>
   );
+}
+
+function SiteFooter({ lawyerProfile: lp }) {
+  if (!lp || !lp.name) return null;
+  return (
+    <div style={{ borderTop: `1px solid ${C.border}`, background: C.surface, padding: '32px 28px' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 40, flexWrap: 'wrap' }}>
+          <div style={{ flex: '0 0 auto' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{lp.name}</span>
+              <span style={{ fontSize: 13, color: C.inkMuted }}>변호사</span>
+              {lp.barNumber && <span style={{ fontSize: 11, color: C.inkSubtle }}>제{lp.barNumber}호</span>}
+            </div>
+            {lp.firm && <div style={{ fontSize: 13, fontWeight: 500, color: C.accent, marginBottom: 2 }}>{lp.firm}</div>}
+            {lp.tagline && <div style={{ fontSize: 12, color: C.inkSubtle, marginTop: 4, fontStyle: 'italic' }}>{lp.tagline}</div>}
+          </div>
+          {(lp.firmAddress || lp.phone || lp.email || lp.website) && (
+            <div style={{ width: 1, background: C.border, alignSelf: 'stretch', minHeight: 40 }} />
+          )}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', gap: '8px 32px' }}>
+            {lp.firmAddress && <ContactItem label="주소" value={lp.firmAddress} />}
+            {lp.phone && <ContactItem label="전화" value={lp.phone} link={`tel:${lp.phone}`} />}
+            {lp.email && <ContactItem label="이메일" value={lp.email} link={`mailto:${lp.email}`} />}
+            {lp.website && <ContactItem label="홈페이지" value={lp.website} link={lp.website} />}
+          </div>
+        </div>
+        <div style={{
+          marginTop: 22, paddingTop: 18, borderTop: `1px solid ${C.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 8,
+        }}>
+          <div style={{ fontSize: 11, color: C.inkSubtle, lineHeight: 1.6 }}>
+            본 서비스는 「가맹사업거래의 공정화에 관한 법률」에 따른 정보공개서 표준양식 작성을 지원합니다.
+            공정거래위원회 등록 전 최종 법률 검토가 권장됩니다.
+          </div>
+          <div style={{ fontSize: 11, color: C.inkSubtle }}>
+            © {new Date().getFullYear()} {lp.firm || lp.name}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactItem({ label, value, link }) {
+  const inner = (
+    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <span style={{ fontSize: 10, color: C.inkSubtle, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ fontSize: 12, color: C.ink, marginTop: 2 }}>{value}</span>
+    </div>
+  );
+  if (link) return (
+    <a href={link} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>{inner}</a>
+  );
+  return inner;
 }
 
 function EmptyState({ hasDocs, onCreate }) {
@@ -587,7 +639,7 @@ function NewDocModal({ onClose, onCreate }) {
 // =========================================================================
 // WIZARD SHELL
 // =========================================================================
-function Wizard({ doc, onUpdate, onBack, onReview }) {
+function Wizard({ doc, onUpdate, onBack, onReview, templateConfig, lawyerProfile, onAdmin }) {
   const [savedAt, setSavedAt] = useState(doc.lastModified);
   const [saveTick, setSaveTick] = useState(0);
 
@@ -642,6 +694,13 @@ function Wizard({ doc, onUpdate, onBack, onReview }) {
             {currentSection.roman}. {currentSection.title}
           </h2>
           <div style={{ height: 1, background: C.border, margin: '20px 0 24px' }} />
+          {templateConfig && templateConfig[`s${doc.currentStep}`] && templateConfig[`s${doc.currentStep}`].notice && (
+            <div style={{ marginBottom: 20 }}>
+              <Hint tone="warning">
+                <strong>법령 변경 주의</strong> — {templateConfig[`s${doc.currentStep}`].notice}
+              </Hint>
+            </div>
+          )}
           <SectionForm doc={doc} setData={setData} step={doc.currentStep} />
         </div>
       </div>
@@ -1539,7 +1598,6 @@ function countFields(doc) {
 // PRINT VIEW — 실제 정보공개서 PDF 레이아웃
 // =========================================================================
 function PrintView({ doc }) {
-  const c = doc.data.s1.company;
   const today = new Date();
   return (
     <div className="fc-print-only" style={{
@@ -1886,6 +1944,564 @@ function PrintSection9({ data, brand }) {
 }
 
 // =========================================================================
+// PRINT — LAWYER BRANDING PAGE
+// =========================================================================
+function PrintLawyerPage({ lawyerProfile: lp }) {
+  return (
+    <div className="fc-print-page-break" style={{
+      ...printSection, minHeight: '180mm', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+    }}>
+      <div style={{
+        border: '2px solid #1B3A5C', borderRadius: 8, padding: '40px 50px',
+        maxWidth: '140mm', width: '100%',
+      }}>
+        <div style={{ fontSize: 10, color: '#888', letterSpacing: '0.15em', marginBottom: 20 }}>
+          이 정보공개서는 법률 자문 하에 작성되었습니다
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: '#1B3A5C', letterSpacing: '-0.01em', marginBottom: 4 }}>
+          {lp.name}
+        </div>
+        <div style={{ fontSize: 13, color: '#444', marginBottom: 2 }}>변호사</div>
+        {lp.barNumber && (
+          <div style={{ fontSize: 11, color: '#888', marginBottom: 16 }}>
+            변호사 등록번호 제{lp.barNumber}호
+          </div>
+        )}
+        {lp.firm && (
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 6 }}>
+            {lp.firm}
+          </div>
+        )}
+        {lp.firmAddress && (
+          <div style={{ fontSize: 11, color: '#666', marginBottom: 12 }}>{lp.firmAddress}</div>
+        )}
+        <div style={{ height: 1, background: '#ddd', margin: '16px 0' }} />
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 24, fontSize: 11, color: '#555' }}>
+          {lp.phone && <span>T. {lp.phone}</span>}
+          {lp.email && <span>E. {lp.email}</span>}
+          {lp.website && <span>W. {lp.website}</span>}
+        </div>
+        {lp.tagline && (
+          <div style={{ marginTop: 20, fontSize: 12, color: '#666', fontStyle: 'italic', lineHeight: 1.6 }}>
+            "{lp.tagline}"
+          </div>
+        )}
+      </div>
+      <div style={{ marginTop: 24, fontSize: 10, color: '#aaa', maxWidth: '140mm', lineHeight: 1.7 }}>
+        본 정보공개서는 가맹사업거래의 공정화에 관한 법률에 따른 표준양식을 기반으로 법률 자문을 받아 작성되었습니다. 공정거래위원회 등록 전 최종 검토가 필요합니다.
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// ANNOUNCEMENT POPUP
+// =========================================================================
+function AnnouncementPopup({ announcements, onDismissAll }) {
+  const [idx, setIdx] = useState(0);
+  if (!announcements || announcements.length === 0) return null;
+  const ann = announcements[idx];
+  const isLast = idx === announcements.length - 1;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15, 15, 15, 0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100, padding: 20,
+    }}>
+      <div style={{
+        background: C.surface, borderRadius: 12, width: '100%', maxWidth: 480,
+        border: `1px solid ${C.border}`, overflow: 'hidden',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+      }}>
+        <div style={{
+          padding: '16px 20px', background: C.warningLight,
+          borderBottom: `1px solid #E8D9B8`,
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <AlertTriangle size={17} color={C.warning} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: C.warning }}>
+              법령 변경 공지 {announcements.length > 1 ? `(${idx + 1}/${announcements.length})` : ''}
+            </div>
+            <div style={{ fontSize: 11, color: C.warning, opacity: 0.8 }}>
+              아래 내용을 확인하고 정보공개서 작성 시 반영하세요.
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: '20px 24px' }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: C.ink, marginBottom: 8 }}>
+            {ann.title}
+          </div>
+          {ann.effectiveDate && (
+            <div style={{ fontSize: 11, color: C.inkSubtle, marginBottom: 14,
+              display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Calendar size={12} /> 시행일: {ann.effectiveDate}
+            </div>
+          )}
+          <div style={{
+            fontSize: 13, color: C.inkMuted, lineHeight: 1.75,
+            padding: '14px', background: C.surfaceAlt, borderRadius: 6,
+            maxHeight: 200, overflowY: 'auto',
+          }}>
+            {ann.content}
+          </div>
+          {ann.affectedSections && ann.affectedSections.length > 0 && (
+            <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: C.inkSubtle }}>영향 단계:</span>
+              {ann.affectedSections.map(s => (
+                <Pill key={s} tone="warning">{s}</Pill>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{
+          padding: '12px 24px 18px', display: 'flex', justifyContent: 'flex-end', gap: 8,
+        }}>
+          {!isLast ? (
+            <>
+              <Btn onClick={onDismissAll}>모두 건너뛰기</Btn>
+              <Btn variant="primary" onClick={() => setIdx(i => i + 1)}>
+                다음 공지 <ArrowRight size={13} />
+              </Btn>
+            </>
+          ) : (
+            <Btn variant="primary" onClick={onDismissAll}>
+              <Check size={13} /> 확인했습니다
+            </Btn>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
+// ADMIN PANEL
+// =========================================================================
+function AdminGate({ onEnter, onClose }) {
+  const [pw, setPw] = useState('');
+  const [mode, setMode] = useState('check'); // 'check' | 'set'
+  const [storedHash, setStoredHash] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await window.storage.get('admin_pw_hash', true);
+        if (r) { setStoredHash(r.value); setMode('check'); }
+        else setMode('set');
+      } catch (e) { setMode('set'); }
+    })();
+  }, []);
+
+  const simpleHash = (s) => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    return String(h);
+  };
+
+  const handleSubmit = async () => {
+    if (mode === 'set') {
+      if (pw.length < 4) { setError('4자 이상 입력하세요.'); return; }
+      await window.storage.set('admin_pw_hash', simpleHash(pw), true);
+      onEnter();
+    } else {
+      if (simpleHash(pw) === storedHash) { onEnter(); }
+      else { setError('비밀번호가 맞지 않습니다.'); setPw(''); }
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15,15,15,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100, padding: 20,
+    }}>
+      <div style={{
+        background: C.surface, borderRadius: 12, padding: 30, width: '100%', maxWidth: 360,
+        border: `1px solid ${C.border}`,
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 22 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: '50%', background: C.accentLight,
+            margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: C.ink }}>관리자 로그인</div>
+          <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 4 }}>
+            {mode === 'set' ? '처음 사용 시 관리자 비밀번호를 설정합니다.' : '변호사 관리자 전용 영역입니다.'}
+          </div>
+        </div>
+        <Field label={mode === 'set' ? '새 비밀번호 설정' : '비밀번호'}>
+          <input
+            type="password"
+            value={pw}
+            onChange={e => { setPw(e.target.value); setError(''); }}
+            onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+            autoFocus
+            style={{
+              width: '100%', height: 38, padding: '0 10px', fontSize: 14,
+              border: `1px solid ${error ? C.danger : C.border}`, borderRadius: 6,
+              background: C.surface, color: C.ink, outline: 'none',
+              fontFamily: 'inherit', boxSizing: 'border-box',
+            }}
+          />
+        </Field>
+        {error && <div style={{ fontSize: 12, color: C.danger, marginTop: 6 }}>{error}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+          <Btn onClick={onClose} style={{ flex: 1 }}>취소</Btn>
+          <Btn variant="primary" onClick={handleSubmit} style={{ flex: 2 }}>
+            {mode === 'set' ? '비밀번호 설정 후 입장' : '입장'}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({ lawyerProfile, setLawyerProfile, announcements, setAnnouncements,
+  templateConfig, setTemplateConfig, onClose }) {
+  const [tab, setTab] = useState('profile'); // 'profile' | 'notices' | 'template'
+  const [saved, setSaved] = useState(false);
+
+  const showSaved = () => { setSaved(true); setTimeout(() => setSaved(false), 1800); };
+
+  const saveLawyerProfile = async (lp) => {
+    setLawyerProfile(lp);
+    await window.storage.set('lawyer_profile', JSON.stringify(lp), true);
+    showSaved();
+  };
+
+  const saveAnnouncements = async (list) => {
+    setAnnouncements(list);
+    await window.storage.set('announcements', JSON.stringify(list), true);
+    showSaved();
+  };
+
+  const saveTemplateConfig = async (cfg) => {
+    setTemplateConfig(cfg);
+    await window.storage.set('template_config', JSON.stringify(cfg), true);
+    showSaved();
+  };
+
+  const TABS = [
+    { id: 'profile', label: '내 정보' },
+    { id: 'notices', label: '법령 공지' },
+    { id: 'template', label: '서식 편집' },
+  ];
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15,15,15,0.5)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+      zIndex: 100,
+    }}>
+      <div style={{
+        background: C.surface, width: '100%', maxWidth: 540, height: '100%',
+        borderLeft: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column',
+        boxShadow: '-20px 0 60px rgba(0,0,0,0.12)',
+      }}>
+        <div style={{
+          padding: '16px 22px', borderBottom: `1px solid ${C.border}`,
+          display: 'flex', alignItems: 'center', background: C.surface,
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>관리자 설정</div>
+          {saved && (
+            <span style={{ marginLeft: 12, fontSize: 12, color: C.success,
+              display: 'flex', alignItems: 'center', gap: 4 }}>
+              <CircleCheck size={13} /> 저장됨
+            </span>
+          )}
+          <button onClick={onClose} style={{
+            marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer',
+            display: 'flex', padding: 4, color: C.inkSubtle,
+          }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surfaceAlt }}>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              flex: 1, padding: '12px 8px', fontSize: 13, fontFamily: 'inherit',
+              fontWeight: tab === t.id ? 600 : 400, cursor: 'pointer',
+              color: tab === t.id ? C.accent : C.inkMuted,
+              background: 'transparent', border: 'none',
+              borderBottom: `2px solid ${tab === t.id ? C.accent : 'transparent'}`,
+            }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 22px' }}>
+          {tab === 'profile' && (
+            <ProfileTab lp={lawyerProfile} onSave={saveLawyerProfile} />
+          )}
+          {tab === 'notices' && (
+            <NoticesTab list={announcements} onSave={saveAnnouncements} />
+          )}
+          {tab === 'template' && (
+            <TemplateTab cfg={templateConfig} onSave={saveTemplateConfig} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileTab({ lp, onSave }) {
+  const [form, setForm] = useState({ ...lp });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ fontSize: 13, color: C.inkMuted, lineHeight: 1.6 }}>
+        여기에 입력한 정보는 PDF 표지 하단과 변호사 명함 페이지에 자동으로 삽입됩니다.
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Field label="성명" required>
+          <TextInput value={form.name} onChange={v => set('name', v)} placeholder="홍길동" />
+        </Field>
+        <Field label="변호사 등록번호">
+          <TextInput value={form.barNumber} onChange={v => set('barNumber', v)} placeholder="12345" />
+        </Field>
+      </div>
+      <Field label="사무소(법무법인)명">
+        <TextInput value={form.firm} onChange={v => set('firm', v)} placeholder="법무법인 ○○○" />
+      </Field>
+      <Field label="사무소 주소">
+        <TextInput value={form.firmAddress} onChange={v => set('firmAddress', v)} />
+      </Field>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        <Field label="전화">
+          <TextInput value={form.phone} onChange={v => set('phone', v)} />
+        </Field>
+        <Field label="이메일">
+          <TextInput value={form.email} onChange={v => set('email', v)} />
+        </Field>
+      </div>
+      <Field label="홈페이지">
+        <TextInput value={form.website} onChange={v => set('website', v)} placeholder="https://" />
+      </Field>
+      <Field label="한 줄 소개 (PDF 하단에 표시)">
+        <TextInput value={form.tagline} onChange={v => set('tagline', v)}
+          placeholder="가맹사업 전문 변호사 | 10년 경력" />
+      </Field>
+      <div style={{ marginTop: 8 }}>
+        <Btn variant="primary" onClick={() => onSave(form)}>
+          <CircleCheck size={14} /> 저장
+        </Btn>
+      </div>
+      {form.name && (
+        <div style={{
+          marginTop: 8, padding: '14px 16px', background: C.surfaceAlt,
+          borderRadius: 8, border: `1px solid ${C.border}`,
+        }}>
+          <div style={{ fontSize: 11, color: C.inkSubtle, marginBottom: 8, fontWeight: 500 }}>
+            PDF 미리보기
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{form.name} 변호사</div>
+          {form.firm && <div style={{ fontSize: 12, color: C.inkMuted }}>{form.firm}</div>}
+          {(form.phone || form.email) && (
+            <div style={{ fontSize: 11, color: C.inkSubtle, marginTop: 4 }}>
+              {[form.phone, form.email].filter(Boolean).join(' · ')}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NoticesTab({ list, onSave }) {
+  const [items, setItems] = useState(list || []);
+  const [editing, setEditing] = useState(null);
+
+  const add = () => {
+    const blank = {
+      id: `ann_${Date.now()}`,
+      title: '',
+      content: '',
+      effectiveDate: '',
+      affectedSections: [],
+      createdAt: new Date().toISOString(),
+    };
+    setEditing(blank);
+  };
+
+  const save = (item) => {
+    const updated = items.find(x => x.id === item.id)
+      ? items.map(x => x.id === item.id ? item : x)
+      : [...items, item];
+    setItems(updated);
+    onSave(updated);
+    setEditing(null);
+  };
+
+  const del = (id) => {
+    const updated = items.filter(x => x.id !== id);
+    setItems(updated);
+    onSave(updated);
+  };
+
+  if (editing) {
+    return <NoticeEditor ann={editing} onSave={save} onCancel={() => setEditing(null)} />;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ fontSize: 13, color: C.inkMuted, lineHeight: 1.6 }}>
+        공지를 추가하면 사용자가 다음에 사이트를 열 때 팝업으로 표시됩니다.
+        법령 개정 사항을 여기서 빠르게 공지하세요.
+      </div>
+      <div>
+        <Btn variant="primary" onClick={add}><Plus size={13} /> 새 공지 추가</Btn>
+      </div>
+      {items.length === 0 && (
+        <div style={{ padding: '28px', textAlign: 'center', fontSize: 12, color: C.inkSubtle,
+          background: C.surfaceAlt, borderRadius: 8 }}>
+          아직 공지가 없습니다.
+        </div>
+      )}
+      {items.map(item => (
+        <div key={item.id} style={{
+          padding: '14px 16px', border: `1px solid ${C.border}`,
+          borderRadius: 8, background: C.surface,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: C.ink }}>{item.title}</div>
+              {item.effectiveDate && (
+                <div style={{ fontSize: 11, color: C.inkSubtle, marginTop: 3 }}>
+                  시행일: {item.effectiveDate}
+                </div>
+              )}
+              <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 6, lineHeight: 1.6 }}>
+                {item.content.slice(0, 80)}{item.content.length > 80 ? '…' : ''}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <Btn size="sm" onClick={() => setEditing(item)}>수정</Btn>
+              <Btn size="sm" variant="danger" onClick={() => del(item.id)}>삭제</Btn>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NoticeEditor({ ann, onSave, onCancel }) {
+  const [form, setForm] = useState({ ...ann });
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const sectionOptions = SECTIONS.map(s => s.roman + '. ' + s.short);
+
+  const toggleSection = (label) => {
+    const list = form.affectedSections || [];
+    set('affectedSections', list.includes(label) ? list.filter(x => x !== label) : [...list, label]);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Btn variant="quiet" size="sm" onClick={onCancel}><ArrowLeft size={13} /> 목록</Btn>
+        <div style={{ fontSize: 14, fontWeight: 600, color: C.ink }}>
+          {ann.title ? '공지 수정' : '새 공지'}
+        </div>
+      </div>
+      <Field label="제목" required>
+        <TextInput value={form.title} onChange={v => set('title', v)}
+          placeholder="가맹사업법 시행령 개정 (2025.01.01)" />
+      </Field>
+      <Field label="시행일">
+        <TextInput value={form.effectiveDate} onChange={v => set('effectiveDate', v)} placeholder="2025-01-01" />
+      </Field>
+      <Field label="상세 내용">
+        <TextArea rows={5} value={form.content} onChange={v => set('content', v)}
+          placeholder="어떤 조항이 바뀌었는지, 어떻게 대응해야 하는지 설명합니다." />
+      </Field>
+      <Field label="영향받는 단계">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+          {sectionOptions.map(s => {
+            const selected = (form.affectedSections || []).includes(s);
+            return (
+              <button key={s} onClick={() => toggleSection(s)} style={{
+                padding: '4px 10px', fontSize: 11, fontFamily: 'inherit', cursor: 'pointer',
+                borderRadius: 999, border: `1px solid ${selected ? C.accent : C.border}`,
+                background: selected ? C.accentLight : 'transparent',
+                color: selected ? C.accent : C.inkMuted, fontWeight: selected ? 500 : 400,
+              }}>
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Btn onClick={onCancel}>취소</Btn>
+        <Btn variant="primary" onClick={() => onSave(form)} disabled={!form.title}>
+          <CircleCheck size={13} /> 저장
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+function TemplateTab({ cfg, onSave }) {
+  const [form, setForm] = useState(cfg || {});
+  const setSection = (sid, k, v) =>
+    setForm(f => ({ ...f, [sid]: { ...(f[sid] || {}), [k]: v } }));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ fontSize: 13, color: C.inkMuted, lineHeight: 1.6 }}>
+        각 단계별 안내 문구를 수정합니다. 법령이 개정되어 특정 섹션에 특별 주의사항을 추가하고 싶을 때 <strong>공지 박스</strong>를 사용하세요. 사용자가 해당 섹션에서 노란 박스로 확인합니다.
+      </div>
+      {SECTIONS.map(s => {
+        const sid = `s${s.id}`;
+        const cur = form[sid] || {};
+        return (
+          <div key={s.id} style={{
+            border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '10px 14px', background: C.surfaceAlt,
+              fontSize: 13, fontWeight: 600, color: C.ink,
+              borderBottom: `1px solid ${C.border}`,
+            }}>
+              {s.roman}. {s.short}
+            </div>
+            <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Field label="섹션 설명 (폼 상단)" hint="기본값 사용 시 비워두세요">
+                <TextArea rows={2} value={cur.description || ''}
+                  onChange={v => setSection(sid, 'description', v)}
+                  placeholder={`Ⅰ장 기재 안내...`} />
+              </Field>
+              <Field label="법령 변경 공지 박스" hint="입력 시 노란 경고 박스로 표시">
+                <TextArea rows={2} value={cur.notice || ''}
+                  onChange={v => setSection(sid, 'notice', v)}
+                  placeholder="예: 2025.1.1 개정으로 ○○항목 추가 기재 필요" />
+              </Field>
+            </div>
+          </div>
+        );
+      })}
+      <div>
+        <Btn variant="primary" onClick={() => onSave(form)}>
+          <CircleCheck size={14} /> 전체 저장
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+// =========================================================================
 // MAIN APP — 라우터 + 상태 오케스트레이션
 // =========================================================================
 export default function App() {
@@ -1893,13 +2509,43 @@ export default function App() {
   const [view, setView] = useState({ name: 'dashboard' });
   const [activeDoc, setActiveDoc] = useState(null);
 
-  // Initial load from window.storage
+  // New state for lawyer features
+  const [lawyerProfile, setLawyerProfile] = useState({
+    name: '', barNumber: '', firm: '', firmAddress: '',
+    phone: '', email: '', website: '', tagline: '',
+  });
+  const [announcements, setAnnouncements] = useState([]);
+  const [templateConfig, setTemplateConfig] = useState({});
+  const [pendingAnnouncements, setPendingAnnouncements] = useState([]);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminGate, setAdminGate] = useState(false);
+
+  // Initial load
   useEffect(() => {
     (async () => {
-      const loaded = await loadAllDocs();
-      setDocs(loaded);
+      const [loadedDocs, lpRaw, annRaw, cfgRaw, dismissedRaw] = await Promise.all([
+        loadAllDocs(),
+        (async () => { try { const r = await window.storage.get('lawyer_profile', true); return r ? JSON.parse(r.value) : null; } catch (e) { return null; } })(),
+        (async () => { try { const r = await window.storage.get('announcements', true); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
+        (async () => { try { const r = await window.storage.get('template_config', true); return r ? JSON.parse(r.value) : {}; } catch (e) { return {}; } })(),
+        (async () => { try { const r = await window.storage.get('dismissed_ann'); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
+      ]);
+      setDocs(loadedDocs);
+      if (lpRaw) setLawyerProfile(lpRaw);
+      if (annRaw) {
+        setAnnouncements(annRaw);
+        const pending = annRaw.filter(a => !(dismissedRaw || []).includes(a.id));
+        if (pending.length > 0) setPendingAnnouncements(pending);
+      }
+      if (cfgRaw) setTemplateConfig(cfgRaw);
     })();
   }, []);
+
+  const dismissAnnouncements = useCallback(async () => {
+    const ids = pendingAnnouncements.map(a => a.id);
+    try { await window.storage.set('dismissed_ann', JSON.stringify(ids)); } catch (e) {}
+    setPendingAnnouncements([]);
+  }, [pendingAnnouncements]);
 
   const handleCreate = useCallback(async (brand) => {
     const doc = emptyDoc(brand);
@@ -1911,10 +2557,7 @@ export default function App() {
 
   const handleOpen = useCallback(async (id) => {
     const d = (docs || []).find(x => x.id === id);
-    if (d) {
-      setActiveDoc(d);
-      setView({ name: 'wizard' });
-    }
+    if (d) { setActiveDoc(d); setView({ name: 'wizard' }); }
   }, [docs]);
 
   const handleDelete = useCallback(async (id) => {
@@ -1929,20 +2572,15 @@ export default function App() {
       if (!prev) return prev;
       const idx = prev.findIndex(d => d.id === next.id);
       if (idx < 0) return [next, ...prev];
-      const out = [...prev];
-      out[idx] = next;
-      return out;
+      const out = [...prev]; out[idx] = next; return out;
     });
   }, []);
 
   const handleBackToDashboard = useCallback(() => {
-    setView({ name: 'dashboard' });
-    setActiveDoc(null);
+    setView({ name: 'dashboard' }); setActiveDoc(null);
   }, []);
 
-  const handleReview = useCallback(() => {
-    setView({ name: 'review' });
-  }, []);
+  const handleReview = useCallback(() => { setView({ name: 'review' }); }, []);
 
   const handleJumpToStep = useCallback((stepId) => {
     setActiveDoc(prev => prev ? { ...prev, currentStep: stepId } : prev);
@@ -1950,18 +2588,16 @@ export default function App() {
   }, []);
 
   const handlePrint = useCallback(() => {
-    // Trigger browser print → user picks "Save as PDF"
     setTimeout(() => { try { window.print(); } catch (e) {} }, 100);
   }, []);
 
-  // Loading state
   if (docs === null) {
     return (
       <div className="fc-app" style={{ minHeight: '100vh', background: C.bg,
         display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <GlobalStyles />
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.inkMuted }}>
-          <Loader2 size={16} className="fc-spin" style={{ animation: 'spin 1s linear infinite' }} />
+          <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
           <span style={{ fontSize: 13 }}>저장된 문서를 불러오는 중…</span>
         </div>
         <style>{`@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }`}</style>
@@ -1972,6 +2608,36 @@ export default function App() {
   return (
     <div className="fc-app">
       <GlobalStyles />
+
+      {/* Announcement popup — shown on dashboard load */}
+      {pendingAnnouncements.length > 0 && view.name === 'dashboard' && (
+        <AnnouncementPopup
+          announcements={pendingAnnouncements}
+          onDismissAll={dismissAnnouncements}
+        />
+      )}
+
+      {/* Admin gate modal */}
+      {adminGate && (
+        <AdminGate
+          onEnter={() => { setAdminGate(false); setShowAdmin(true); }}
+          onClose={() => setAdminGate(false)}
+        />
+      )}
+
+      {/* Admin panel slide-over */}
+      {showAdmin && (
+        <AdminPanel
+          lawyerProfile={lawyerProfile}
+          setLawyerProfile={setLawyerProfile}
+          announcements={announcements}
+          setAnnouncements={setAnnouncements}
+          templateConfig={templateConfig}
+          setTemplateConfig={setTemplateConfig}
+          onClose={() => setShowAdmin(false)}
+        />
+      )}
+
       <div className="fc-app-chrome">
         {view.name === 'dashboard' && (
           <Dashboard
@@ -1979,6 +2645,8 @@ export default function App() {
             onOpen={handleOpen}
             onCreate={handleCreate}
             onDelete={handleDelete}
+            onAdmin={() => setAdminGate(true)}
+            lawyerProfile={lawyerProfile}
           />
         )}
         {view.name === 'wizard' && activeDoc && (
@@ -1987,6 +2655,9 @@ export default function App() {
             onUpdate={handleUpdate}
             onBack={handleBackToDashboard}
             onReview={handleReview}
+            templateConfig={templateConfig}
+            lawyerProfile={lawyerProfile}
+            onAdmin={() => setAdminGate(true)}
           />
         )}
         {view.name === 'review' && activeDoc && (
@@ -1998,7 +2669,8 @@ export default function App() {
           />
         )}
       </div>
-      {/* Always-rendered print template (hidden on screen, shown only when window.print is invoked) */}
+
+      {/* Always-rendered print template */}
       {activeDoc && <PrintView doc={activeDoc} />}
     </div>
   );
