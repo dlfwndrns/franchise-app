@@ -564,17 +564,7 @@ function TopBar({ onAdmin, lawyerProfile }) {
           정보공개서 자동작성
         </div>
       </div>
-      {lp && lp.name && (
-        <div style={{
-          marginLeft: 20, padding: '4px 12px', background: C.accentLight,
-          borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: C.accent }} />
-          <span style={{ fontSize: 12, color: C.accent, fontWeight: 500 }}>
-            {lp.name} 변호사 {lp.firm ? `| ${lp.firm}` : ''} 법률 서비스
-          </span>
-        </div>
-      )}
+      
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12,
         fontSize: 13, color: C.inkMuted }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
