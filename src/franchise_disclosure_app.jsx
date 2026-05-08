@@ -6,29 +6,6 @@ import {
   Briefcase, Scale, Wallet, ShieldCheck, GraduationCap, Store,
   ChevronRight, FileText, Check, Hash, Loader2,
 } from 'lucide-react';
-// LocalStorage 호환 레이어 (Vercel 배포용)
-const _storage = {
-  async set(key, value, _shared) {
-    try { localStorage.setItem(key, value); return { key, value }; }
-    catch (e) { return null; }
-  },
-  async get(key, _shared) {
-    const value = localStorage.getItem(key);
-    if (value === null) throw new Error('not found');
-    return { key, value };
-  },
-  async delete(key, _shared) {
-    localStorage.removeItem(key); return { key, deleted: true };
-  },
-  async list(prefix = '', _shared) {
-    const keys = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(prefix)) keys.push(k);
-    }
-    return { keys };
-  }
-};
 
 // =========================================================================
 // DESIGN TOKENS
@@ -77,6 +54,7 @@ function emptyDoc(brandName = '') {
     id: `doc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     brandName: brandName || '신규 브랜드',
     status: 'draft',
+    pwHash: '',
     createdAt: now,
     lastModified: now,
     currentStep: 1,
@@ -127,12 +105,12 @@ function emptyDoc(brandName = '') {
 // =========================================================================
 async function loadAllDocs() {
   try {
-    const result = await _storage.list('doc:');
+    const result = await window.storage.list('doc:');
     if (!result || !result.keys || result.keys.length === 0) return [];
     const out = [];
     for (const k of result.keys) {
       try {
-        const r = await _storage.get(k);
+        const r = await window.storage.get(k);
         if (r) out.push(JSON.parse(r.value));
       } catch (e) { /* skip */ }
     }
@@ -146,13 +124,13 @@ async function loadAllDocs() {
 async function saveDoc(doc) {
   try {
     doc.lastModified = new Date().toISOString();
-    await _storage.set(`doc:${doc.id}`, JSON.stringify(doc));
+    await window.storage.set(`doc:${doc.id}`, JSON.stringify(doc));
     return true;
   } catch (e) { return false; }
 }
 
 async function deleteDocStorage(id) {
-  try { await _storage.delete(`doc:${id}`); return true; } catch (e) { return false; }
+  try { await window.storage.delete(`doc:${id}`); return true; } catch (e) { return false; }
 }
 
 // =========================================================================
@@ -352,10 +330,11 @@ function GlobalStyles() {
 // =========================================================================
 // DASHBOARD VIEW
 // =========================================================================
-function Dashboard({ docs, onOpen, onCreate, onDelete, onAdmin, lawyerProfile }) {
+function Dashboard({ docs, onOpen, onCreate, onDelete, onAdmin, lawyerProfile, isAdmin }) {
   const [filter, setFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showNewModal, setShowNewModal] = useState(false);
+  const [unlocking, setUnlocking] = useState(null); // doc being unlocked
 
   const filtered = useMemo(() => {
     return docs.filter(d => {
@@ -424,19 +403,120 @@ function Dashboard({ docs, onOpen, onCreate, onDelete, onAdmin, lawyerProfile })
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {filtered.map(d => (
-              <DocCard key={d.id} doc={d} onOpen={() => onOpen(d.id)} onDelete={() => onDelete(d.id)} />
+              <DocCard key={d.id} doc={d}
+                onOpen={() => setUnlocking(d)}
+                onDelete={() => onDelete(d.id)}
+                isAdmin={isAdmin}
+              />
             ))}
           </div>
         )}
       </div>
 
+      {unlocking && (
+        <DocPasswordModal
+          doc={unlocking}
+          isAdmin={isAdmin}
+          onSuccess={() => { onOpen(unlocking.id); setUnlocking(null); }}
+          onClose={() => setUnlocking(null)}
+        />
+      )}
+
       {showNewModal && (
         <NewDocModal
           onClose={() => setShowNewModal(false)}
-          onCreate={(brand) => { setShowNewModal(false); onCreate(brand); }}
+          onCreate={(brand, pwHash) => { setShowNewModal(false); onCreate(brand, pwHash); }}
         />
       )}
       <SiteFooter lawyerProfile={lawyerProfile} />
+    </div>
+  );
+}
+
+function DocPasswordModal({ doc, isAdmin, onSuccess, onClose }) {
+  const [pw, setPw] = useState('');
+  const [error, setError] = useState('');
+
+  const simpleHash = (s) => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    return String(h);
+  };
+
+  const handleSubmit = () => {
+    if (isAdmin) { onSuccess(); return; } // 관리자는 비밀번호 없이 접근 가능
+    if (!doc.pwHash || simpleHash(pw) === doc.pwHash) {
+      onSuccess();
+    } else {
+      setError('비밀번호가 맞지 않습니다.');
+      setPw('');
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(15,15,15,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100, padding: 20,
+    }}>
+      <div style={{
+        background: C.surface, borderRadius: 12, padding: 28, width: '100%', maxWidth: 380,
+        border: `1px solid ${C.border}`,
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <div style={{
+            width: 44, height: 44, borderRadius: '50%', background: C.accentLight,
+            margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: C.ink }}>{doc.brandName}</div>
+          <div style={{ fontSize: 12, color: C.inkMuted, marginTop: 4 }}>
+            {isAdmin ? '관리자 권한으로 접근합니다.' : '이 문서에 접근하려면 비밀번호가 필요합니다.'}
+          </div>
+        </div>
+        {isAdmin ? (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn onClick={onClose} style={{ flex: 1 }}>취소</Btn>
+            <Btn variant="primary" onClick={handleSubmit} style={{ flex: 2 }}>
+              관리자 권한으로 열기
+            </Btn>
+          </div>
+        ) : (
+          <>
+            <Field label="문서 비밀번호">
+              <input
+                type="password"
+                value={pw}
+                onChange={e => { setPw(e.target.value); setError(''); }}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                autoFocus
+                style={{
+                  width: '100%', height: 38, padding: '0 10px', fontSize: 14,
+                  border: `1px solid ${error ? C.danger : C.border}`,
+                  borderRadius: 6, background: C.surface, color: C.ink,
+                  outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                }}
+              />
+            </Field>
+            {error && (
+              <div style={{ fontSize: 12, color: C.danger, marginTop: 6,
+                display: 'flex', alignItems: 'center', gap: 5 }}>
+                <AlertTriangle size={12} /> {error}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+              <Btn onClick={onClose} style={{ flex: 1 }}>취소</Btn>
+              <Btn variant="primary" onClick={handleSubmit} disabled={!pw} style={{ flex: 2 }}>
+                열기
+              </Btn>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -574,7 +654,7 @@ function EmptyState({ hasDocs, onCreate }) {
   );
 }
 
-function DocCard({ doc, onOpen, onDelete }) {
+function DocCard({ doc, onOpen, onDelete, isAdmin }) {
   const pct = progressPct(doc);
   const isComplete = pct === 100;
   return (
@@ -612,11 +692,17 @@ function DocCard({ doc, onOpen, onDelete }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-          <Btn size="sm" variant="quiet" onClick={onDelete}>
-            <Trash2 size={13} />
-          </Btn>
+          {isAdmin && (
+            <Btn size="sm" variant="quiet" onClick={onDelete} style={{ color: C.danger }}>
+              <Trash2 size={13} />
+            </Btn>
+          )}
           <Btn size="md" onClick={onOpen}>
-            {isComplete ? '검토하기' : '이어 작성'} <ChevronRight size={13} />
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+              <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            {isComplete ? '검토하기' : '이어 작성'}
           </Btn>
         </div>
       </div>
@@ -626,9 +712,25 @@ function DocCard({ doc, onOpen, onDelete }) {
 
 function NewDocModal({ onClose, onCreate }) {
   const [brand, setBrand] = useState('');
-  const handleSubmit = () => {
-    if (brand.trim()) onCreate(brand.trim());
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [error, setError] = useState('');
+
+  const simpleHash = (s) => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    return String(h);
   };
+
+  const handleSubmit = () => {
+    if (!brand.trim()) return;
+    if (pw.length < 4) { setError('비밀번호는 4자 이상이어야 합니다.'); return; }
+    if (pw !== pw2) { setError('비밀번호가 일치하지 않습니다.'); return; }
+    onCreate(brand.trim(), simpleHash(pw));
+  };
+
+  const canSubmit = brand.trim() && pw.length >= 4 && pw === pw2;
+
   return (
     <div style={{
       position: 'fixed', inset: 0, background: 'rgba(20, 20, 20, 0.42)',
@@ -643,14 +745,52 @@ function NewDocModal({ onClose, onCreate }) {
           새 정보공개서 작성
         </div>
         <div style={{ fontSize: 12, color: C.inkMuted, marginBottom: 18, lineHeight: 1.6 }}>
-          영업표지(브랜드명)를 먼저 입력해 주세요. 정보공개서는 브랜드별로 작성·등록합니다.
+          브랜드명과 문서 비밀번호를 설정합니다. 비밀번호는 이 문서를 열거나 수정할 때 필요합니다.
         </div>
-        <Field label="영업표지(브랜드명)" required>
-          <TextInput value={brand} onChange={setBrand} placeholder="예: 반포삼겹살" />
-        </Field>
-        <div style={{ display: 'flex', gap: 8, marginTop: 22, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Field label="영업표지(브랜드명)" required>
+            <TextInput value={brand} onChange={setBrand} placeholder="예: 반포삼겹살" />
+          </Field>
+          <Field label="문서 비밀번호" required hint="4자 이상, 잊어버리면 찾을 수 없습니다">
+            <input
+              type="password"
+              value={pw}
+              onChange={e => { setPw(e.target.value); setError(''); }}
+              placeholder="비밀번호 입력"
+              style={{
+                width: '100%', height: 36, padding: '0 10px', fontSize: 13,
+                border: `1px solid ${C.border}`, borderRadius: 6, background: C.surface,
+                color: C.ink, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+              }}
+            />
+          </Field>
+          <Field label="비밀번호 확인" required>
+            <input
+              type="password"
+              value={pw2}
+              onChange={e => { setPw2(e.target.value); setError(''); }}
+              placeholder="비밀번호 재입력"
+              style={{
+                width: '100%', height: 36, padding: '0 10px', fontSize: 13,
+                border: `1px solid ${pw2 && pw !== pw2 ? C.danger : C.border}`,
+                borderRadius: 6, background: C.surface,
+                color: C.ink, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+              }}
+            />
+          </Field>
+        </div>
+        {error && (
+          <div style={{ fontSize: 12, color: C.danger, marginTop: 8,
+            display: 'flex', alignItems: 'center', gap: 5 }}>
+            <AlertTriangle size={12} /> {error}
+          </div>
+        )}
+        <Hint tone="warning" style={{ marginTop: 14 }}>
+          비밀번호를 잊어버리면 문서에 다시 접근할 수 없습니다. 안전한 곳에 메모해 두세요.
+        </Hint>
+        <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
           <Btn onClick={onClose}>취소</Btn>
-          <Btn variant="primary" onClick={handleSubmit} disabled={!brand.trim()}>
+          <Btn variant="primary" onClick={handleSubmit} disabled={!canSubmit}>
             작성 시작
           </Btn>
         </div>
@@ -2112,7 +2252,7 @@ function AdminGate({ onEnter, onClose }) {
   useEffect(() => {
     (async () => {
       try {
-        const r = await _storage.get('admin_pw_hash', true);
+        const r = await window.storage.get('admin_pw_hash', true);
         if (r) { setStoredHash(r.value); setMode('check'); }
         else setMode('set');
       } catch (e) { setMode('set'); }
@@ -2128,7 +2268,7 @@ function AdminGate({ onEnter, onClose }) {
   const handleSubmit = async () => {
     if (mode === 'set') {
       if (pw.length < 4) { setError('4자 이상 입력하세요.'); return; }
-      await _storage.set('admin_pw_hash', simpleHash(pw), true);
+      await window.storage.set('admin_pw_hash', simpleHash(pw), true);
       onEnter();
     } else {
       if (simpleHash(pw) === storedHash) { onEnter(); }
@@ -2197,19 +2337,19 @@ function AdminPanel({ lawyerProfile, setLawyerProfile, announcements, setAnnounc
 
   const saveLawyerProfile = async (lp) => {
     setLawyerProfile(lp);
-    await _storage.set('lawyer_profile', JSON.stringify(lp), true);
+    await window.storage.set('lawyer_profile', JSON.stringify(lp), true);
     showSaved();
   };
 
   const saveAnnouncements = async (list) => {
     setAnnouncements(list);
-    await _storage.set('announcements', JSON.stringify(list), true);
+    await window.storage.set('announcements', JSON.stringify(list), true);
     showSaved();
   };
 
   const saveTemplateConfig = async (cfg) => {
     setTemplateConfig(cfg);
-    await _storage.set('template_config', JSON.stringify(cfg), true);
+    await window.storage.set('template_config', JSON.stringify(cfg), true);
     showSaved();
   };
 
@@ -2542,16 +2682,17 @@ export default function App() {
   const [pendingAnnouncements, setPendingAnnouncements] = useState([]);
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminGate, setAdminGate] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Initial load
   useEffect(() => {
     (async () => {
       const [loadedDocs, lpRaw, annRaw, cfgRaw, dismissedRaw] = await Promise.all([
         loadAllDocs(),
-        (async () => { try { const r = await _storage.get('lawyer_profile', true); return r ? JSON.parse(r.value) : null; } catch (e) { return null; } })(),
-        (async () => { try { const r = await _storage.get('announcements', true); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
-        (async () => { try { const r = await _storage.get('template_config', true); return r ? JSON.parse(r.value) : {}; } catch (e) { return {}; } })(),
-        (async () => { try { const r = await _storage.get('dismissed_ann'); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
+        (async () => { try { const r = await window.storage.get('lawyer_profile', true); return r ? JSON.parse(r.value) : null; } catch (e) { return null; } })(),
+        (async () => { try { const r = await window.storage.get('announcements', true); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
+        (async () => { try { const r = await window.storage.get('template_config', true); return r ? JSON.parse(r.value) : {}; } catch (e) { return {}; } })(),
+        (async () => { try { const r = await window.storage.get('dismissed_ann'); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
       ]);
       setDocs(loadedDocs);
       if (lpRaw) setLawyerProfile(lpRaw);
@@ -2566,12 +2707,13 @@ export default function App() {
 
   const dismissAnnouncements = useCallback(async () => {
     const ids = pendingAnnouncements.map(a => a.id);
-    try { await _storage.set('dismissed_ann', JSON.stringify(ids)); } catch (e) {}
+    try { await window.storage.set('dismissed_ann', JSON.stringify(ids)); } catch (e) {}
     setPendingAnnouncements([]);
   }, [pendingAnnouncements]);
 
-  const handleCreate = useCallback(async (brand) => {
+  const handleCreate = useCallback(async (brand, pwHash) => {
     const doc = emptyDoc(brand);
+    doc.pwHash = pwHash || '';
     await saveDoc(doc);
     setDocs(prev => [doc, ...(prev || [])]);
     setActiveDoc(doc);
@@ -2643,7 +2785,7 @@ export default function App() {
       {/* Admin gate modal */}
       {adminGate && (
         <AdminGate
-          onEnter={() => { setAdminGate(false); setShowAdmin(true); }}
+          onEnter={() => { setAdminGate(false); setShowAdmin(true); setIsAdmin(true); }}
           onClose={() => setAdminGate(false)}
         />
       )}
@@ -2670,6 +2812,7 @@ export default function App() {
             onDelete={handleDelete}
             onAdmin={() => setAdminGate(true)}
             lawyerProfile={lawyerProfile}
+            isAdmin={isAdmin}
           />
         )}
         {view.name === 'wizard' && activeDoc && (
