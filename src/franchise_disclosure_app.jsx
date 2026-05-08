@@ -6,6 +6,29 @@ import {
   Briefcase, Scale, Wallet, ShieldCheck, GraduationCap, Store,
   ChevronRight, FileText, Check, Hash, Loader2,
 } from 'lucide-react';
+// LocalStorage 호환 레이어 (Vercel 배포용)
+const _storage = {
+  async set(key, value, _shared) {
+    try { localStorage.setItem(key, value); return { key, value }; }
+    catch (e) { return null; }
+  },
+  async get(key, _shared) {
+    const value = localStorage.getItem(key);
+    if (value === null) throw new Error('not found');
+    return { key, value };
+  },
+  async delete(key, _shared) {
+    localStorage.removeItem(key); return { key, deleted: true };
+  },
+  async list(prefix = '', _shared) {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(prefix)) keys.push(k);
+    }
+    return { keys };
+  }
+};
 
 // =========================================================================
 // DESIGN TOKENS
@@ -104,12 +127,12 @@ function emptyDoc(brandName = '') {
 // =========================================================================
 async function loadAllDocs() {
   try {
-    const result = await window.storage.list('doc:');
+    const result = await _storage.list('doc:');
     if (!result || !result.keys || result.keys.length === 0) return [];
     const out = [];
     for (const k of result.keys) {
       try {
-        const r = await window.storage.get(k);
+        const r = await _storage.get(k);
         if (r) out.push(JSON.parse(r.value));
       } catch (e) { /* skip */ }
     }
@@ -123,13 +146,13 @@ async function loadAllDocs() {
 async function saveDoc(doc) {
   try {
     doc.lastModified = new Date().toISOString();
-    await window.storage.set(`doc:${doc.id}`, JSON.stringify(doc));
+    await _storage.set(`doc:${doc.id}`, JSON.stringify(doc));
     return true;
   } catch (e) { return false; }
 }
 
 async function deleteDocStorage(id) {
-  try { await window.storage.delete(`doc:${id}`); return true; } catch (e) { return false; }
+  try { await _storage.delete(`doc:${id}`); return true; } catch (e) { return false; }
 }
 
 // =========================================================================
@@ -2089,7 +2112,7 @@ function AdminGate({ onEnter, onClose }) {
   useEffect(() => {
     (async () => {
       try {
-        const r = await window.storage.get('admin_pw_hash', true);
+        const r = await _storage.get('admin_pw_hash', true);
         if (r) { setStoredHash(r.value); setMode('check'); }
         else setMode('set');
       } catch (e) { setMode('set'); }
@@ -2105,7 +2128,7 @@ function AdminGate({ onEnter, onClose }) {
   const handleSubmit = async () => {
     if (mode === 'set') {
       if (pw.length < 4) { setError('4자 이상 입력하세요.'); return; }
-      await window.storage.set('admin_pw_hash', simpleHash(pw), true);
+      await _storage.set('admin_pw_hash', simpleHash(pw), true);
       onEnter();
     } else {
       if (simpleHash(pw) === storedHash) { onEnter(); }
@@ -2174,19 +2197,19 @@ function AdminPanel({ lawyerProfile, setLawyerProfile, announcements, setAnnounc
 
   const saveLawyerProfile = async (lp) => {
     setLawyerProfile(lp);
-    await window.storage.set('lawyer_profile', JSON.stringify(lp), true);
+    await _storage.set('lawyer_profile', JSON.stringify(lp), true);
     showSaved();
   };
 
   const saveAnnouncements = async (list) => {
     setAnnouncements(list);
-    await window.storage.set('announcements', JSON.stringify(list), true);
+    await _storage.set('announcements', JSON.stringify(list), true);
     showSaved();
   };
 
   const saveTemplateConfig = async (cfg) => {
     setTemplateConfig(cfg);
-    await window.storage.set('template_config', JSON.stringify(cfg), true);
+    await _storage.set('template_config', JSON.stringify(cfg), true);
     showSaved();
   };
 
@@ -2525,10 +2548,10 @@ export default function App() {
     (async () => {
       const [loadedDocs, lpRaw, annRaw, cfgRaw, dismissedRaw] = await Promise.all([
         loadAllDocs(),
-        (async () => { try { const r = await window.storage.get('lawyer_profile', true); return r ? JSON.parse(r.value) : null; } catch (e) { return null; } })(),
-        (async () => { try { const r = await window.storage.get('announcements', true); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
-        (async () => { try { const r = await window.storage.get('template_config', true); return r ? JSON.parse(r.value) : {}; } catch (e) { return {}; } })(),
-        (async () => { try { const r = await window.storage.get('dismissed_ann'); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
+        (async () => { try { const r = await _storage.get('lawyer_profile', true); return r ? JSON.parse(r.value) : null; } catch (e) { return null; } })(),
+        (async () => { try { const r = await _storage.get('announcements', true); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
+        (async () => { try { const r = await _storage.get('template_config', true); return r ? JSON.parse(r.value) : {}; } catch (e) { return {}; } })(),
+        (async () => { try { const r = await _storage.get('dismissed_ann'); return r ? JSON.parse(r.value) : []; } catch (e) { return []; } })(),
       ]);
       setDocs(loadedDocs);
       if (lpRaw) setLawyerProfile(lpRaw);
@@ -2543,7 +2566,7 @@ export default function App() {
 
   const dismissAnnouncements = useCallback(async () => {
     const ids = pendingAnnouncements.map(a => a.id);
-    try { await window.storage.set('dismissed_ann', JSON.stringify(ids)); } catch (e) {}
+    try { await _storage.set('dismissed_ann', JSON.stringify(ids)); } catch (e) {}
     setPendingAnnouncements([]);
   }, [pendingAnnouncements]);
 
