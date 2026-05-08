@@ -8,27 +8,46 @@ import {
 } from 'lucide-react';
 
 // =========================================================================
-// LOCALSTORAGE 호환 레이어 (Vercel 배포용 — window.storage 대체)
+// SUPABASE 온라인 저장소 (어느 기기에서 접속해도 동기화)
 // =========================================================================
+const SUPA_URL = 'https://uuajflmexeamsuslaegk.supabase.co';
+const SUPA_KEY = 'sb_publishable_HCKm76GOfPsj4CjBmYkO5g_A4XQ-l-z';
+const SUPA_H = {
+  'apikey': SUPA_KEY,
+  'Authorization': `Bearer ${SUPA_KEY}`,
+  'Content-Type': 'application/json',
+  'Prefer': 'resolution=merge-duplicates',
+};
 const _storage = {
   async set(key, value, _shared) {
-    try { localStorage.setItem(key, value); return { key, value }; } catch (e) { return null; }
+    try {
+      await fetch(`${SUPA_URL}/rest/v1/kv_store`, {
+        method: 'POST', headers: SUPA_H,
+        body: JSON.stringify({ key, value }),
+      });
+      return { key, value };
+    } catch (e) { return null; }
   },
   async get(key, _shared) {
-    const value = localStorage.getItem(key);
-    if (value === null) throw new Error('not found');
-    return { key, value };
+    const res = await fetch(`${SUPA_URL}/rest/v1/kv_store?key=eq.${encodeURIComponent(key)}`, { headers: SUPA_H });
+    const data = await res.json();
+    if (!data || data.length === 0) throw new Error('not found');
+    return { key, value: data[0].value };
   },
   async delete(key, _shared) {
-    localStorage.removeItem(key); return { key, deleted: true };
+    try {
+      await fetch(`${SUPA_URL}/rest/v1/kv_store?key=eq.${encodeURIComponent(key)}`, {
+        method: 'DELETE', headers: SUPA_H,
+      });
+      return { key, deleted: true };
+    } catch (e) { return null; }
   },
   async list(prefix = '', _shared) {
-    const keys = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(prefix)) keys.push(k);
-    }
-    return { keys };
+    try {
+      const res = await fetch(`${SUPA_URL}/rest/v1/kv_store?key=like.${encodeURIComponent(prefix + '*')}`, { headers: SUPA_H });
+      const data = await res.json();
+      return { keys: (data || []).map(r => r.key) };
+    } catch (e) { return { keys: [] }; }
   }
 };
 
